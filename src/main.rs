@@ -7,8 +7,8 @@ struct Cli {
     image_1: std::path::PathBuf,
     #[clap(parse(from_os_str))]
     image_2: std::path::PathBuf,
-    #[clap(short = 'o', long = "output", default_value = "diff.png")]
-    out_path: std::path::PathBuf
+    #[clap(short = 'o', long = "output")]
+    out_path: Option<std::path::PathBuf>
 }
 
 fn main() {
@@ -31,6 +31,8 @@ fn main() {
     }
     
     total_luma = ((total_luma as f64) / 255.0) / (image_1.width() * image_1.height()) as f64;
-    out_buf.save_with_format(args.out_path, image::ImageFormat::Png).unwrap();
+    if args.out_path.is_some() {
+        out_buf.save_with_format(args.out_path.unwrap(), image::ImageFormat::Png).unwrap();
+    }
     print!("{}\n", total_luma);
 }
