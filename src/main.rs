@@ -18,21 +18,57 @@ fn main() {
     let image_2 = image::open(args.image_2.as_path()).unwrap().into_rgb8();
 
     let mut out_buf = image::ImageBuffer::new(image_1.width(), image_1.height());
+    let mut floats = vec![vec![0.0f32; image_1.height() as usize]; image_1.width() as usize];
 
-    let mut total_luma: f64 = 0.0;
+    let mut max = 0.0f32;
+    let mut error = 0.0f32;
+    for (x, y, _pixel) in out_buf.enumerate_pixels() {
+        let mut color: [f32; 3] = [0.0, 0.0, 0.0];
+        color[0] = (image_1.get_pixel(x, y).0[0]).abs_diff(image_2.get_pixel(x, y).0[0]) as f32 / 255.0;
+        color[1] = (image_1.get_pixel(x, y).0[1]).abs_diff(image_2.get_pixel(x, y).0[1]) as f32 / 255.0;
+        color[2] = (image_1.get_pixel(x, y).0[2]).abs_diff(image_2.get_pixel(x, y).0[2]) as f32 / 255.0;
+
+        let tmp = (color[0] as f32) * (color[0] as f32) + (color[1] as f32) * (color[1] as f32) + (color[2] as f32) * (color[2] as f32);
+        floats[x as usize][y as usize] = tmp.sqrt();
+        if tmp.sqrt() > max {
+            max = tmp.sqrt();
+        }
+        error += tmp;
+    }
+
     for (x, y, pixel) in out_buf.enumerate_pixels_mut() {
-        let mut color: [u8; 3] = [1, 1, 1];
-        color[0] = (image_1.get_pixel(x, y).0[0]).abs_diff(image_2.get_pixel(x, y).0[0]);
-        color[1] = (image_1.get_pixel(x, y).0[1]).abs_diff(image_2.get_pixel(x, y).0[1]);
-        color[2] = (image_1.get_pixel(x, y).0[2]).abs_diff(image_2.get_pixel(x, y).0[2]);
-        let luma: u8 = (0.299 * color[0] as f32 + 0.587 * color[1] as f32 + 0.114 * color[2] as f32) as u8;
-        *pixel = image::Luma([luma]);
-        total_luma = total_luma + luma as f64;
+        let mut r = 0f32;
+        let mut g = 0f32;
+        let mut b = 0f32;
+
+        let n = floats[x as usize][y as usize];
+        let h = if max > 0.0f32 {240.0f32*(max-n)/max} else {240.0f32};
+
+        let s = 0.9;
+        let v = 0.3 + 0.6*(n/max);
+
+        let hi = (h/60.0).floor() as u32;
+        let f = (h/60.0) - hi as f32;
+        let p = v*(1.0f32-s);
+        let q = v*(1.0f32-s*f);
+        let t = v*(1.0f32-s*(1.0f32-f));
+
+        if hi == 0 || hi == 6 {r=v; g=t; b=p;}
+        else if hi == 1 {r=q; g=v; b=p;}
+        else if hi == 2 {r=p; g=v; b=t;}
+        else if hi == 3 {r=p; g=q; b=v;}
+        else if hi == 4 {r=t; g=p; b=v;}
+        else {r=v; g=p; b=q;}
+
+        *pixel = image::Rgb([(r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8]);
     }
     
-    total_luma = ((total_luma as f64) / 255.0) / (image_1.width() * image_1.height()) as f64;
+    error = (error / (image_1.width() as f32 * image_1.height() as f32)).sqrt();
     if args.out_path.is_some() {
-        out_buf.save_with_format(args.out_path.unwrap(), image::ImageFormat::Png).unwrap();
+        let path = args.out_path.unwrap();
+        out_buf.save_with_format(path.clone(), image::ImageFormat::Png).unwrap();
+        print!("{}: {}\n", path.to_str().unwrap(), error);
+    } else {
+        print!("{}\n", error);
     }
-    print!("{}\n", total_luma);
 }
